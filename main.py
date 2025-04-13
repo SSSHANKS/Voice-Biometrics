@@ -47,7 +47,7 @@ def get_db():
     finally:
         db.close()
 
-ubm_model = UBM('D:\Base work dir\python projects\REST api\lstm.h5')
+ubm_model = UBM('lstm.h5')
 
 
 
