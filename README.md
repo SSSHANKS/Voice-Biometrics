@@ -2,7 +2,7 @@
 
 ## Description
 
-The "RNN UBM" project is designed for training and evaluating a Recurrent Neural Network-based Universal Background Model (UBM) for client verification and identification using audio signal processing. The project extracts MFCC features from audio files, computes embeddings with a pre-trained RNN model (optionally transforming them using LDA), and provides a REST API for enrollment, identification, and verification. Additionally, WebSocket endpoints allow for real-time streaming of audio data for both verification and identification.
+Project is designed for training and evaluating a Recurrent Neural Network-based Universal Background Model (UBM) for client verification and identification using audio signal processing. The project extracts MFCC features from audio files, computes embeddings with a pre-trained RNN model (optionally transforming them using LDA), and provides a REST API for enrollment, identification, and verification. Additionally, WebSocket endpoints allow for real-time streaming of audio data for both verification and identification.
 
 ## File Structure
 
@@ -121,4 +121,4 @@ Then access the API docs at `http://127.0.0.1:8000/docs`.
 
 ## Conclusion
 
-The **RNN UBM** project combines machine learning and real-time web technologies to deliver a functional client verification and identification system using audio recordings. It includes tools for training and evaluating models, managing users, performing recognition, and testing in real-time using WebSocket connections.
+Project combines machine learning and real-time web technologies to deliver a functional client verification and identification system using audio recordings. It includes tools for training and evaluating models, managing users, performing recognition, and testing in real-time using WebSocket connections.
