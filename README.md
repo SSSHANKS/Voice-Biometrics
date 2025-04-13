@@ -1,4 +1,4 @@
-# RNN UBM
+# Voice Biometrics REST api
 
 ## Description
 
