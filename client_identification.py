@@ -7,7 +7,7 @@ import wave
 
 async def data_generator(file_path, sample_rate=8000, num_channels=1, sample_width=2):
     """
-    Generator odczytujący dane audio w segmentach odpowiadających 1 sekundzie.
+    A generator that reads audio data in 1-second segments.
 
     Parameters:
     - file_path (str): Ścieżka do pliku WAV.
@@ -17,22 +17,18 @@ async def data_generator(file_path, sample_rate=8000, num_channels=1, sample_wid
     """
     try:
         with wave.open(file_path, "rb") as wav_file:
-            # Odczyt parametrów pliku
             #file_sample_rate = sample_rate
             #file_num_channels = wav_file.getnchannels()
             #file_sample_width = wav_file.getsampwidth()
 
-            # Liczba bajtów w sekundzie
             bytes_per_second = sample_rate * num_channels * sample_width
 
             print(f"Sample rate: {sample_rate}, Channels: {num_channels}, Sample width: {sample_width} bytes")
             print(f"Bytes per second: {bytes_per_second}")
 
             while True:
-                # Odczyt segmentu odpowiadającego 1 sekundzie
                 chunk = wav_file.readframes(sample_rate)
                 
-                # Sprawdzenie długości chunku (musi odpowiadać co najmniej 1 sekundzie)
                 if len(chunk) < bytes_per_second:
                     print("Skipping chunk smaller than 1 second.")
                     break  
@@ -50,14 +46,13 @@ async def data_generator(file_path, sample_rate=8000, num_channels=1, sample_wid
         print(f"Error reading audio file: {e}")
 
 async def websocket_client():
-    client_id = str(np.random.randint(0, 1000))  # Randomowy client_id
+    client_id = str(np.random.randint(0, 1000))  
     uri = f"ws://localhost:8000/ws/identify/{client_id}"  
     gen = data_generator("combined_audio.wav", sample_rate=8000)
 
     async with websockets.connect(uri) as websocket:
         while True:
             try:
-                # Generowanie i wysyłanie danych do serwera
                 data = await gen.__anext__()
 
                 await websocket.send(data)
@@ -77,5 +72,4 @@ async def websocket_client():
                 print(f"Error: {e}")
                 break
 
-# Uruchomienie klienta
 asyncio.run(websocket_client())
