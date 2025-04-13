@@ -7,13 +7,11 @@ import joblib
 
 class UBM:
     def __init__(self, pretrained_model, lda_model=None):
-        # Wczytywanie modelu 
         if isinstance(pretrained_model, str):  
             self.model = tf.keras.models.load_model(pretrained_model)
         else:
             self.model = pretrained_model
         
-        # Wczytywanie modelu LDA
         if lda_model is not None:
             if isinstance(lda_model, str):  
                 self.lda = joblib.load(lda_model)
@@ -23,12 +21,10 @@ class UBM:
             self.lda = None
 
     def extract_embedding(self, X, use_lda=0):
-        # Generowanie embeddingów z warstwy bottleneck modelu
         intermediate_layer_model = tf.keras.Model(inputs=self.model.layers[0].input,
                                                   outputs=self.model.get_layer('bottleneck').output)
         embeddings = intermediate_layer_model.predict(X)
         
-        # Przekształcanie embeddingów za pomocą wytrenowanego LDA
         if use_lda and self.lda is not None:
             embeddings = self.lda.transform(embeddings)
 
@@ -37,19 +33,19 @@ class UBM:
 
 def process_audio_file(file_path, ubm_model, sr=8000, n_mfcc=13, window_size_sec=1, use_lda=False):
     """
-    Przetwarza plik audio, dzieli na okienka o zadanej długości, oblicza MFCC i generuje embeddingi,
-    które są uśredniane po czasie.
-
+    Processes an audio file by splitting it into windows of a specified length, computing MFCCs, and generating embeddings,
+    which are averaged over time.
+    
     Parameters:
-    - file_path (str): Ścieżka do pliku audio.
-    - ubm_model (UBM): Obiekt modelu UBM do generowania embeddingów.
-    - sr (int): Docelowa częstotliwość próbkowania (default: 8000 Hz).
-    - n_mfcc (int): Liczba współczynników MFCC (default: 13).
-    - window_size_sec (int): Długość okienka w sekundach (default: 1).
-    - use_lda (bool): Czy użyć LDA do przekształcenia embeddingów (default: False).
-
+    - file_path (str): Path to the audio file.
+    - ubm_model (UBM): UBM model object used for generating embeddings.
+    - sr (int): Target sampling rate (default: 8000 Hz).
+    - n_mfcc (int): Number of MFCC coefficients (default: 13).
+    - window_size_sec (int): Length of each window in seconds (default: 1).
+    - use_lda (bool): Whether to use LDA for transforming embeddings (default: False).
+    
     Returns:
-    - np.ndarray: Uśrednione embeddingi dla całego nagrania.
+    - np.ndarray: Averaged embeddings for the entire recording.
     """
     try:
         y, _ = librosa.load(file_path, sr=sr)
@@ -66,14 +62,11 @@ def process_audio_file(file_path, ubm_model, sr=8000, n_mfcc=13, window_size_sec
 
             mfcc = librosa.feature.mfcc(y=window, sr=sr, n_mfcc=n_mfcc).T
 
-            # Reshape dla moelu (czas, 13, 1)
             mfcc_cnn_input = mfcc.reshape(mfcc.shape[0], mfcc.shape[1], 1)
 
-            # Generowanie embeddingu dla okienka
             embedding = ubm_model.extract_embedding(np.array([mfcc_cnn_input]), use_lda=use_lda)
             embeddings.append(embedding)
 
-        # Uśrednianie embeddingów po czasie
         if len(embeddings) > 0:
             averaged_embedding = np.mean(embeddings, axis=0)
         else:
