@@ -16,13 +16,11 @@ import httpx
 import wave
 import collections
 
-# Konfiguracja bazy danych
 DATABASE_URL = "sqlite:///./speaker_verification.db"
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
-# Modele bazy danych
 class User(Base):
     __tablename__ = "users"
     id = Column(String, primary_key=True, index=True, default=lambda: str(uuid4()))
@@ -38,13 +36,10 @@ class UserEnrollment(Base):
 
 
 
-# Tworzenie tabel w bazie danych
 Base.metadata.create_all(bind=engine)
 
-# Inicjalizacja aplikacji
 app = FastAPI()
 
-# Dependency dla sesji bazy danych
 def get_db():
     db = SessionLocal()
     try:
@@ -52,7 +47,6 @@ def get_db():
     finally:
         db.close()
 
-# Definicja modelu
 ubm_model = UBM('D:\Base work dir\python projects\REST api\lstm.h5')
 
 
@@ -63,13 +57,13 @@ ubm_model = UBM('D:\Base work dir\python projects\REST api\lstm.h5')
 @app.post("/users/{username}")
 def create_user(username: str, db: Session = Depends(get_db)):
     """
-    Tworzy nowego użytkownika w bazie danych.
+    Creates a new user in the database.
     
-    Parametry:
-    - username (str): Nazwa użytkownika.
-
-    Zwraca:
-    - Słownik zawierający ID, nazwę użytkownika oraz datę utworzenia.
+    Parameters:
+    - username (str): Username.
+    
+    Returns:
+    - dict: A dictionary containing the ID, username, and creation date.
     """
     user = User(username=username)
     db.add(user)
@@ -92,22 +86,21 @@ class UpdateUserRequest(BaseModel):
 @app.put("/users/{user_id}")
 def update_user(user_id: str, request: UpdateUserRequest, db: Session = Depends(get_db)):
     """
-    Aktualizuje dane użytkownika na podstawie jego ID.
+    Updates user data based on their ID.
     
-    Parametry:
-    - user_id (str): ID użytkownika do zaktualizowania.
-    - request (UpdateUserRequest): Model danych zawierający nową nazwę użytkownika.
-
-    Zwraca:
-    - Słownik zawierający ID użytkownika, zaktualizowaną nazwę użytkownika oraz komunikat potwierdzający.
+    Parameters:
+    - user_id (str): ID of the user to update.
+    - request (UpdateUserRequest): Data model containing the new username.
     
-    W przypadku, gdy użytkownik o podanym ID nie istnieje, zwraca błąd HTTP 404.
+    Returns:
+    - dict: A dictionary containing the user ID, updated username, and a confirmation message.
+    
+    If a user with the given ID does not exist, returns an HTTP 404 error.
     """
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail=f"User with id {user_id} not found.")
     
-    # Aktualizacja danych użytkownika
     user.username = request.username
     db.commit()
     db.refresh(user)
@@ -125,37 +118,33 @@ def update_user(user_id: str, request: UpdateUserRequest, db: Session = Depends(
 @app.put("/users/enrollments/{user_id}")
 async def create_enrollment(user_id: str, file: UploadFile = File(...), db: Session = Depends(get_db)):
     """
-    Tworzy nowy enrollment (rejestracja użytkownika z embeddingiem) na podstawie przesłanego pliku audio.
+    Creates a new enrollment (user registration with an embedding) based on the uploaded audio file.
     
-    Parametry:
-    - user_id (str): ID użytkownika, dla którego tworzony jest enrollment.
-    - file (UploadFile): Plik audio przesłany przez użytkownika.
-
-    Zwraca:
-    - Słownik zawierający ID enrollmentu, ID użytkownika oraz datę utworzenia.
-
-    Jeśli użytkownik nie istnieje lub już posiada enrollment, zwracany jest odpowiedni błąd HTTP.
+    Parameters:
+    - user_id (str): ID of the user for whom the enrollment is being created.
+    - file (UploadFile): Audio file uploaded by the user.
+    
+    Returns:
+    - dict: A dictionary containing the enrollment ID, user ID, and creation date.
+    
+    If the user does not exist or already has an enrollment, an appropriate HTTP error is returned.
     """
-    # Sprawdzenie, czy użytkownik istnieje
+
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
-    # Sprawdzenie, czy użytkownik już ma enrollment
     existing_enrollment = db.query(UserEnrollment).filter(UserEnrollment.user_id == user_id).first()
     if existing_enrollment:
         raise HTTPException(status_code=400, detail="User already has an enrollment")
     
-    # Tymczasowe zapisanie pliku audio
     temp_file_path = f"temp_{file.filename}"
     with open(temp_file_path, "wb") as f:
         f.write(await file.read())
     
     try:
-        # Przetwarzanie pliku audio i generowanie embeddingów
         averaged_embedding = process_audio_file(temp_file_path, ubm_model)
 
-        # Tworzenie nowego enrollmentu
         enrollment = UserEnrollment(user_id=user_id, embedding=averaged_embedding.tolist())
         db.add(enrollment)
         db.commit()
@@ -167,23 +156,21 @@ async def create_enrollment(user_id: str, file: UploadFile = File(...), db: Sess
             "created_at": enrollment.created_at,
         }
     finally:
-        # Usuwanie tymczasowego pliku
         os.remove(temp_file_path)
 
 
 @app.get("/users/enrollments/{user_id}")
 def get_enrollments(user_id: str, db: Session = Depends(get_db)):
     """
-    Pobiera informacje o enrollmentcie dla danego użytkownika.
-
-    Parametry:
-    - user_id (str): ID użytkownika, dla którego pobierane są dane enrollmentu.
-
-    Zwraca:
-    - Słownik zawierający ID enrollmentu, ID użytkownika, datę utworzenia oraz informację,
-      czy embedding istnieje.
-
-    Jeśli użytkownik nie posiada enrollmentu, zwracany jest błąd HTTP 404.
+    Retrieves enrollment information for a given user.
+    
+    Parameters:
+    - user_id (str): ID of the user whose enrollment data is being retrieved.
+    
+    Returns:
+    - dict: A dictionary containing the enrollment ID, user ID, creation date, and a flag indicating whether an embedding exists.
+    
+    If the user does not have an enrollment, an HTTP 404 error is returned.
     """
     enrollment = db.query(UserEnrollment).filter(UserEnrollment.user_id == user_id).first()
     if not enrollment:
@@ -198,28 +185,27 @@ def get_enrollments(user_id: str, db: Session = Depends(get_db)):
 @app.put("/users/enrollments/{user_id}")
 async def update_enrollment(user_id: str, file: UploadFile = File(...), db: Session = Depends(get_db)):
     """
-    Aktualizuje istniejący enrollment na podstawie przesłanego pliku audio.
-
-    Parametry:
-    - enrollment_id (str): ID istniejącego enrollmentu.
-    - file (UploadFile): Nowy plik audio przesłany przez użytkownika.
-
-    Zwraca:
-    - Słownik zawierający ID enrollmentu, ID użytkownika oraz komunikat potwierdzający aktualizację.
-
-    Jeśli enrollment nie istnieje, zwracany jest błąd HTTP 404.
+    Updates an existing enrollment based on the uploaded audio file.
+    
+    Parameters:
+    - enrollment_id (str): ID of the existing enrollment.
+    - file (UploadFile): New audio file uploaded by the user.
+    
+    Returns:
+    - dict: A dictionary containing the enrollment ID, user ID, and a confirmation message.
+    
+    If the enrollment does not exist, an HTTP 404 error is returned.
     """
+    
     enrollment = db.query(UserEnrollment).filter(UserEnrollment.user_id == user_id).first()
     if not enrollment:
         raise HTTPException(status_code=404, detail=f"Enrollment with user id {user_id} not found.")
     
-    # Tymczasowe zapisanie pliku audio
     temp_file_path = f"temp_{file.filename}"
     with open(temp_file_path, "wb") as f:
         f.write(await file.read())
 
     try:
-        # Przetwarzanie pliku audio i generowanie nowego embeddingu
         new_embedding = process_audio_file(temp_file_path, ubm_model)
 
         enrollment.embedding = new_embedding.tolist()
@@ -232,7 +218,6 @@ async def update_enrollment(user_id: str, file: UploadFile = File(...), db: Sess
             "message": "Enrollment updated successfully."
         }
     finally:
-        # Usuwanie tymczasowego pliku
         os.remove(temp_file_path)
 
 
@@ -242,22 +227,24 @@ async def update_enrollment(user_id: str, file: UploadFile = File(...), db: Sess
 @app.post('/users/enrollments/identification')
 async def identify_user(file: UploadFile = File(...), db: Session = Depends(get_db)):
     """
-    Identyfikuje użytkownika na podstawie przesłanego pliku audio, porównując jego embedding
-    z enrollmentami zapisanymi w bazie danych.
-
-    Parametry:
-    - file (UploadFile): Plik audio przesłany przez użytkownika.
-
-    Zwraca:
-    - Słownik z listą do 5 najlepszych dopasowań, gdzie każde dopasowanie zawiera:
-      - user_id: ID użytkownika.
-      - enrollment_id: ID powiązanego enrollmentu.
-      - username: Nazwę użytkownika.
-      - similarity: Wartość podobieństwa (cosine similarity) w procentach.
-
-    Jeśli nie znaleziono użytkowników z podobieństwem powyżej progu 0.8, zwracana jest odpowiednia informacja.
-    Jeśli w bazie nie ma żadnych enrollmentów, zwracany jest błąd HTTP 404.
+    Identifies a user based on the uploaded audio file by comparing its embedding
+    to enrollments stored in the database.
+    
+    Parameters:
+    - file (UploadFile): Audio file uploaded by the user.
+    
+    Returns:
+    - dict: A list of up to 5 best matches, where each match includes:
+      - user_id: User ID.
+      - enrollment_id: Associated enrollment ID.
+      - username: Username.
+      - similarity: Similarity score (cosine similarity) in percent.
+    
+    If no users are found with similarity above the 0.8 threshold, an appropriate message is returned.
+    If there are no enrollments in the database, an HTTP 404 error is returned.
     """
+
+    
     temp_file_path = f"temp_{file.filename}"
     with open(temp_file_path, "wb") as f:
         f.write(await file.read())
@@ -265,12 +252,10 @@ async def identify_user(file: UploadFile = File(...), db: Session = Depends(get_
     try:
         averaged_embedding = process_audio_file(temp_file_path, ubm_model)
 
-        # Pobieranie wszystkich enrollmentów z bazy
         enrollments = db.query(UserEnrollment).all()
         if not enrollments:
             raise HTTPException(status_code=404, detail="No enrollments found in the database.")
         
-        # Lista do przechowywania wyników porównań
         results = []
 
         averaged_embedding_2d = np.array(averaged_embedding).reshape(1, -1)
@@ -280,10 +265,8 @@ async def identify_user(file: UploadFile = File(...), db: Session = Depends(get_
 
             username = db.query(User).filter(User.id == enrollment.user_id).first()
 
-            # Obliczanie cosine similarity
             similarity = cosine_similarity(averaged_embedding_2d, enrollment_embedding.reshape(1, -1))[0][0]
 
-            # Dodawanie wyniku do listy, jeśli przekracza threshold
             if similarity >= 0.8:
                 results.append({
                     "user_id": enrollment.user_id,
@@ -292,10 +275,8 @@ async def identify_user(file: UploadFile = File(...), db: Session = Depends(get_
                     "similarity": f"{round(similarity * 100, 2)}%"
                 })
 
-        # Sortowanie wyników po similarity w kolejności malejącej
         results = sorted(results, key=lambda x: x['similarity'], reverse=True)
 
-        # Zwracanie 5 najlepszych wyników lub informacji, że brak wyników
         if results:
             return {"top_matches": results[:5]}
         else:
@@ -312,22 +293,24 @@ async def identify_user(file: UploadFile = File(...), db: Session = Depends(get_
 @app.post('/users/enrollments/verification/{user_id}')
 async def verify_user(user_id: str, file: UploadFile = File(...), db: Session = Depends(get_db)):
     """
-    Weryfikuje tożsamość użytkownika na podstawie przesłanego pliku audio, 
-    porównując jego embedding z zapisanym enrollmentem w bazie danych.
-
-    Parametry:
-    - user_id (str): ID użytkownika, którego tożsamość jest weryfikowana.
-    - file (UploadFile): Plik audio przesłany przez użytkownika do weryfikacji.
-
-    Zwraca:
-    - Słownik zawierający:
-        - user_id: ID użytkownika.
-        - verified (bool): Informację, czy użytkownik został zweryfikowany.
-        - similarity (float): Wartość podobieństwa (cosine similarity) między embeddingami.
-        - message (str): Wiadomość wskazująca wynik weryfikacji.
-
-    Jeśli użytkownik nie posiada zapisanego enrollmentu, zwracany jest błąd HTTP 404.
+    Verifies a user's identity based on the uploaded audio file by comparing its embedding 
+    to the stored enrollment in the database.
+    
+    Parameters:
+    - user_id (str): ID of the user whose identity is being verified.
+    - file (UploadFile): Audio file uploaded by the user for verification.
+    
+    Returns:
+    - dict: A dictionary containing:
+        - user_id: User ID.
+        - verified (bool): Indicates whether the user was successfully verified.
+        - similarity (float): Cosine similarity score between embeddings.
+        - message (str): Message indicating the verification result.
+    
+    If the user does not have a stored enrollment, an HTTP 404 error is returned.
     """
+
+    
     enrollment = db.query(UserEnrollment).filter(UserEnrollment.user_id == user_id).first()
     if not enrollment:
         raise HTTPException(status_code=404, detail=f"No enrollment found for user_id {user_id}.")
@@ -339,17 +322,14 @@ async def verify_user(user_id: str, file: UploadFile = File(...), db: Session = 
     try:
         averaged_embedding = process_audio_file(temp_file_path, ubm_model)
 
-        # Konwersja embeddingów na numpy array
         enrollment_embedding = np.array(enrollment.embedding)
         averaged_embedding = np.array(averaged_embedding)
 
-        # Obliczanie cosine similarity
         similarity = cosine_similarity(
             averaged_embedding.reshape(1, -1),
             enrollment_embedding.reshape(1, -1)
         )[0][0]
 
-        # Próg weryfikacji (threshold)
         threshold = 0.42
 
         if similarity >= threshold:
@@ -406,15 +386,13 @@ async def websocket_verify(websocket: WebSocket, db: Session = Depends(get_db)):
     await websocket.accept()
     try:
         async with httpx.AsyncClient() as client:
-            audio_buffer = collections.deque(maxlen=10)  # Bufor do 10 sekund audio
+            audio_buffer = collections.deque(maxlen=10)  
             while True:
-                # Odbieranie danych binarnych
                 data = await websocket.receive_bytes()
 
-                # Odczyt długości i user_id
                 user_id_length = int.from_bytes(data[:2], "big")
                 user_id = data[2:2 + user_id_length].decode("utf-8")
-                # Pozostałe dane audio
+
                 audio_data = data[2 + user_id_length:]
 
                 audio_buffer.append(audio_data)
@@ -429,14 +407,12 @@ async def websocket_verify(websocket: WebSocket, db: Session = Depends(get_db)):
                     wav_file.setframerate(8000)
                     wav_file.writeframes(combined_data.tobytes())
 
-                # Wysyłanie danych do endpointu weryfikacji
                 with open(temp_file_path, "rb") as audio_file:
                         response = await client.post(
                             url=f"http://127.0.0.1:8000/users/enrollments/verification/{user_id}", 
                             files={"file": audio_file}
                         )
 
-                # Obsługa odpowiedzi
                 if response.status_code == 200:
                     verification_results = response.json()
                     await websocket.send_json(verification_results)
@@ -457,9 +433,9 @@ async def websocket_identify(websocket: WebSocket, db: Session = Depends(get_db)
     await websocket.accept()
     try:
         async with httpx.AsyncClient() as client:
-            audio_buffer = collections.deque(maxlen=10)  # Bufor do 10 sekund audio
+            audio_buffer = collections.deque(maxlen=10)  
             while True:
-                # Odbieranie danych binarnych
+
                 data = await websocket.receive_bytes()
 
                 audio_buffer.append(data)
@@ -474,14 +450,14 @@ async def websocket_identify(websocket: WebSocket, db: Session = Depends(get_db)
                     wav_file.setframerate(8000)
                     wav_file.writeframes(audio_data.tobytes())
 
-                # Wysyłanie danych do endpointu identyfikacji
+                
                 with open(temp_file_path, "rb") as audio_file:
                         response = await client.post(
                             url="http://127.0.0.1:8000/users/enrollments/identification", 
                             files={"file": audio_file}
                         )
 
-                # Obsługa odpowiedzi
+                
                 if response.status_code == 200:
                     identification_results = response.json()
                     await websocket.send_json(identification_results)
