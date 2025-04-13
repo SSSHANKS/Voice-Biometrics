@@ -115,8 +115,6 @@ Then access the API docs at `http://127.0.0.1:8000/docs`.
 - `client_verification.py` sends user ID and audio in chunks to verify identity  
 - `client_identification.py` sends audio without ID and receives similarity-based matches
 
-## License
-
 
 
 ## Conclusion
